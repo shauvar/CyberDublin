@@ -1,14 +1,15 @@
 #version 330 core
 out vec4 FragColor;
 
-in vec3 FragPos;   // Position of the fragment
-in vec2 TexCoords; // Texture coordinates
-in vec3 Normal;    // Normal of the fragment
+in vec3 FragPos;
+in vec2 TexCoords;
+in vec3 Normal;
 
 uniform sampler2D texture1;
-uniform vec3 lightPos;   // Position of the light
-uniform vec3 viewPos;    // Camera position
-uniform vec3 lightColor; // Color of the light
+uniform vec3 lightPos;
+uniform vec3 viewPos;
+uniform vec3 lightColor;
+uniform float fadeValue;  // Add this line
 
 void main() {
     // Ambient lighting
@@ -28,7 +29,7 @@ void main() {
     float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32);
     vec3 specular = specularStrength * spec * lightColor;
 
-    // Combine all lighting components
+    // Combine lighting with fade value
     vec3 result = (ambient + diffuse + specular) * texture(texture1, TexCoords).rgb;
-    FragColor = vec4(result, 1.0);
+    FragColor = vec4(result, fadeValue);  // Use fade value for alpha
 }

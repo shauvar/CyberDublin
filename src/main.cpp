@@ -11,6 +11,9 @@
 #include <ctime>   // For seeding rand()
 #include <sstream>
 #include <fstream>
+#include <string>
+#include <chrono>
+#include <thread>
 
 // Global variables
 int windowWidth = 1080;
@@ -34,6 +37,19 @@ GLuint skyboxVAO, skyboxVBO;
 GLuint skyboxShaderProgram;
 GLuint skyboxTexture;
 
+// For FPS calculation
+double lastTime = 0.0;
+int frameCount = 0;
+double lastFPSUpdate = 0.0;
+double currentFPS = 0.0;
+
+// Camera parameters
+float yaw = -90.0f;    // Start looking forward (negative z)
+float pitch = 0.0f;    // Start looking horizontally
+bool firstMouse = true;
+float lastX = windowWidth / 2.0f;
+float lastY = windowHeight / 2.0f;
+const float mouseSensitivity = 0.01f;
 
 // Utility function to read a shader file
 std::string readFile(const char *filePath)
@@ -150,35 +166,54 @@ float cubeVertices[] = {
 
     float skyboxVertices[] = {
     // positions          
-    -1.0f,  1.0f, -1.0f,
+    // Back face
     -1.0f, -1.0f, -1.0f,
      1.0f, -1.0f, -1.0f,
+     1.0f,  1.0f, -1.0f,
+     1.0f,  1.0f, -1.0f,
+    -1.0f,  1.0f, -1.0f,
+    -1.0f, -1.0f, -1.0f,
+
+    // Front face
+    -1.0f, -1.0f,  1.0f,
+     1.0f, -1.0f,  1.0f,
+     1.0f,  1.0f,  1.0f,
+     1.0f,  1.0f,  1.0f,
+    -1.0f,  1.0f,  1.0f,
+    -1.0f, -1.0f,  1.0f,
+
+    // Left face
+    -1.0f,  1.0f,  1.0f,
+    -1.0f,  1.0f, -1.0f,
+    -1.0f, -1.0f, -1.0f,
+    -1.0f, -1.0f, -1.0f,
+    -1.0f, -1.0f,  1.0f,
+    -1.0f,  1.0f,  1.0f,
+
+    // Right face
+     1.0f,  1.0f,  1.0f,
+     1.0f,  1.0f, -1.0f,
      1.0f, -1.0f, -1.0f,
-     1.0f,  1.0f, -1.0f,
-    -1.0f,  1.0f, -1.0f,
-    
-    -1.0f,  1.0f,  1.0f,
-    -1.0f, -1.0f,  1.0f,
-     1.0f, -1.0f,  1.0f,
+     1.0f, -1.0f, -1.0f,
      1.0f, -1.0f,  1.0f,
      1.0f,  1.0f,  1.0f,
-    -1.0f,  1.0f,  1.0f,
 
-    -1.0f,  1.0f,  1.0f,
-    -1.0f,  1.0f, -1.0f,
-     1.0f,  1.0f, -1.0f,
-     1.0f,  1.0f, -1.0f,
-     1.0f,  1.0f,  1.0f,
-    -1.0f,  1.0f,  1.0f,
-
-    -1.0f, -1.0f,  1.0f,
+    // Bottom face
     -1.0f, -1.0f, -1.0f,
      1.0f, -1.0f, -1.0f,
-     1.0f, -1.0f, -1.0f,
      1.0f, -1.0f,  1.0f,
-    -1.0f, -1.0f,  1.0f
+     1.0f, -1.0f,  1.0f,
+    -1.0f, -1.0f,  1.0f,
+    -1.0f, -1.0f, -1.0f,
+
+    // Top face
+    -1.0f,  1.0f, -1.0f,
+     1.0f,  1.0f, -1.0f,
+     1.0f,  1.0f,  1.0f,
+     1.0f,  1.0f,  1.0f,
+    -1.0f,  1.0f,  1.0f,
+    -1.0f,  1.0f, -1.0f
 };
-
 
 // Load a texture from file
 GLuint loadTexture(const char *path)
@@ -241,6 +276,24 @@ void setupOpenGL(GLuint &VAO, GLuint &VBO)
     glBindVertexArray(0);
 }
 
+void updateFPS(GLFWwindow* window) {
+    // Get current time
+    double currentTime = glfwGetTime();
+    frameCount++;
+
+    // Update FPS every 0.5 seconds
+    if (currentTime - lastFPSUpdate >= 0.5) {
+        // Calculate FPS
+        currentFPS = double(frameCount) / (currentTime - lastFPSUpdate);
+        frameCount = 0;
+        lastFPSUpdate = currentTime;
+
+        // Update window title with FPS
+        std::string title = "CyberDublin | FPS: " + std::to_string(static_cast<int>(currentFPS));
+        glfwSetWindowTitle(window, title.c_str());
+    }
+}
+
 
 void setupSkybox() {
     // Generate and bind VAO and VBO for skybox
@@ -292,10 +345,43 @@ void renderSkybox(const glm::mat4& view, const glm::mat4& projection) {
     
     // Render skybox quad
     glBindVertexArray(skyboxVAO);
-    glDrawArrays(GL_TRIANGLES, 0, 24); // Updated vertex count
+    glDrawArrays(GL_TRIANGLES, 0, 36); // Updated vertex count
     glBindVertexArray(0);
     
     glDepthFunc(GL_LESS);
+}
+
+void mouse_callback(GLFWwindow* window, double xposIn, double yposIn) {
+    float xpos = static_cast<float>(xposIn);
+    float ypos = static_cast<float>(yposIn);
+
+    if (firstMouse) {
+        lastX = xpos;
+        lastY = ypos;
+        firstMouse = false;
+    }
+
+    float xoffset = xpos - lastX;
+    float yoffset = lastY - ypos; // Reversed since y-coordinates range from bottom to top
+    lastX = xpos;
+    lastY = ypos;
+
+    xoffset *= mouseSensitivity;
+    yoffset *= mouseSensitivity;
+
+    yaw += xoffset;
+    pitch += yoffset;
+
+    // Constrain pitch
+    if (pitch > 89.0f) pitch = 89.0f;
+    if (pitch < -89.0f) pitch = -89.0f;
+
+    // Update camera front vector
+    glm::vec3 direction;
+    direction.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
+    direction.y = sin(glm::radians(pitch));
+    direction.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
+    cameraFront = glm::normalize(direction);
 }
 
 // Callback to handle window resizing
@@ -311,18 +397,28 @@ void framebuffer_size_callback(GLFWwindow *window, int width, int height)
 
 void processInput(GLFWwindow *window)
 {
-    float moveSpeed = 0.010f; // Adjust this value to control movement speed
+    float moveSpeed = 0.01f;
+    float strafeSpeed = 0.01f;
 
-    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS)
-        cameraPos.z -= moveSpeed;
-    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS)
-        cameraPos.z += moveSpeed;
-    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS)
-        cameraPos.x -= moveSpeed;
-    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS)
-        cameraPos.x += moveSpeed;
+    // Forward/Backward
+    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+        cameraPos += moveSpeed * cameraFront;
+    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+        cameraPos -= moveSpeed * cameraFront;
 
-    // Add escape key to close window
+    // Left/Right strafe
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+        cameraPos -= glm::normalize(glm::cross(cameraFront, cameraUp)) * strafeSpeed;
+    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+        cameraPos += glm::normalize(glm::cross(cameraFront, cameraUp)) * strafeSpeed;
+
+    // Up/Down movement
+    if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS)
+        cameraPos += cameraUp * moveSpeed;
+    if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS)
+        cameraPos -= cameraUp * moveSpeed;
+
+    // Escape to close
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
 }
@@ -350,7 +446,9 @@ int main()
         return -1;
     }
     glfwMakeContextCurrent(window);
-
+    // Mouse capture and callback
+    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+    glfwSetCursorPosCallback(window, mouse_callback);   
     // Set the framebuffer size callback
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
 
@@ -484,6 +582,10 @@ int main()
                 glDrawArrays(GL_TRIANGLES, 0, 36);
             }
         }
+
+  
+        updateFPS(window);
+
 
         // Swap buffers and poll events
         glfwSwapBuffers(window);
