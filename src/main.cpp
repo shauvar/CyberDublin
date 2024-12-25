@@ -15,6 +15,12 @@
 #include <chrono>
 #include <thread>
 
+struct InstanceData
+{
+    glm::vec3 position;
+    glm::vec3 scale;
+};
+
 // Global variables
 int windowWidth = 1080;
 int windowHeight = 800;
@@ -37,6 +43,11 @@ GLuint skyboxVAO, skyboxVBO;
 GLuint skyboxShaderProgram;
 GLuint skyboxTexture;
 
+const int MAX_INSTANCES = gridSizeX * gridSizeZ;
+
+std::vector<InstanceData> instanceData(MAX_INSTANCES);
+GLuint instanceVBO;
+
 // For FPS calculation
 double lastTime = 0.0;
 int frameCount = 0;
@@ -44,8 +55,8 @@ double lastFPSUpdate = 0.0;
 double currentFPS = 0.0;
 
 // Camera parameters
-float yaw = -90.0f;    // Start looking forward (negative z)
-float pitch = 0.0f;    // Start looking horizontally
+float yaw = -90.0f; // Start looking forward (negative z)
+float pitch = 0.0f; // Start looking horizontally
 bool firstMouse = true;
 float lastX = windowWidth / 2.0f;
 float lastY = windowHeight / 2.0f;
@@ -164,56 +175,55 @@ float cubeVertices[] = {
     -0.5f, 0.5f, 0.5f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f,
     -0.5f, 0.5f, -0.5f, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f};
 
-    float skyboxVertices[] = {
-    // positions          
+float skyboxVertices[] = {
+    // positions
     // Back face
     -1.0f, -1.0f, -1.0f,
-     1.0f, -1.0f, -1.0f,
-     1.0f,  1.0f, -1.0f,
-     1.0f,  1.0f, -1.0f,
-    -1.0f,  1.0f, -1.0f,
+    1.0f, -1.0f, -1.0f,
+    1.0f, 1.0f, -1.0f,
+    1.0f, 1.0f, -1.0f,
+    -1.0f, 1.0f, -1.0f,
     -1.0f, -1.0f, -1.0f,
 
     // Front face
-    -1.0f, -1.0f,  1.0f,
-     1.0f, -1.0f,  1.0f,
-     1.0f,  1.0f,  1.0f,
-     1.0f,  1.0f,  1.0f,
-    -1.0f,  1.0f,  1.0f,
-    -1.0f, -1.0f,  1.0f,
+    -1.0f, -1.0f, 1.0f,
+    1.0f, -1.0f, 1.0f,
+    1.0f, 1.0f, 1.0f,
+    1.0f, 1.0f, 1.0f,
+    -1.0f, 1.0f, 1.0f,
+    -1.0f, -1.0f, 1.0f,
 
     // Left face
-    -1.0f,  1.0f,  1.0f,
-    -1.0f,  1.0f, -1.0f,
+    -1.0f, 1.0f, 1.0f,
+    -1.0f, 1.0f, -1.0f,
     -1.0f, -1.0f, -1.0f,
     -1.0f, -1.0f, -1.0f,
-    -1.0f, -1.0f,  1.0f,
-    -1.0f,  1.0f,  1.0f,
+    -1.0f, -1.0f, 1.0f,
+    -1.0f, 1.0f, 1.0f,
 
     // Right face
-     1.0f,  1.0f,  1.0f,
-     1.0f,  1.0f, -1.0f,
-     1.0f, -1.0f, -1.0f,
-     1.0f, -1.0f, -1.0f,
-     1.0f, -1.0f,  1.0f,
-     1.0f,  1.0f,  1.0f,
+    1.0f, 1.0f, 1.0f,
+    1.0f, 1.0f, -1.0f,
+    1.0f, -1.0f, -1.0f,
+    1.0f, -1.0f, -1.0f,
+    1.0f, -1.0f, 1.0f,
+    1.0f, 1.0f, 1.0f,
 
     // Bottom face
     -1.0f, -1.0f, -1.0f,
-     1.0f, -1.0f, -1.0f,
-     1.0f, -1.0f,  1.0f,
-     1.0f, -1.0f,  1.0f,
-    -1.0f, -1.0f,  1.0f,
+    1.0f, -1.0f, -1.0f,
+    1.0f, -1.0f, 1.0f,
+    1.0f, -1.0f, 1.0f,
+    -1.0f, -1.0f, 1.0f,
     -1.0f, -1.0f, -1.0f,
 
     // Top face
-    -1.0f,  1.0f, -1.0f,
-     1.0f,  1.0f, -1.0f,
-     1.0f,  1.0f,  1.0f,
-     1.0f,  1.0f,  1.0f,
-    -1.0f,  1.0f,  1.0f,
-    -1.0f,  1.0f, -1.0f
-};
+    -1.0f, 1.0f, -1.0f,
+    1.0f, 1.0f, -1.0f,
+    1.0f, 1.0f, 1.0f,
+    1.0f, 1.0f, 1.0f,
+    -1.0f, 1.0f, 1.0f,
+    -1.0f, 1.0f, -1.0f};
 
 // Load a texture from file
 GLuint loadTexture(const char *path)
@@ -230,7 +240,7 @@ GLuint loadTexture(const char *path)
         std::cout << "Width: " << width << std::endl;
         std::cout << "Height: " << height << std::endl;
         std::cout << "Channels: " << nrChannels << std::endl;
-        
+
         GLenum format = (nrChannels == 3) ? GL_RGB : GL_RGBA;
         glBindTexture(GL_TEXTURE_2D, textureID);
         glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
@@ -244,7 +254,7 @@ GLuint loadTexture(const char *path)
     else
     {
         std::cerr << "Failed to load texture: " << path << std::endl;
-        std::cerr << "STB Error: " << stbi_failure_reason() << std::endl;  // Add this line
+        std::cerr << "STB Error: " << stbi_failure_reason() << std::endl; // Add this line
         return 0;
     }
     stbi_image_free(data);
@@ -255,8 +265,11 @@ void setupOpenGL(GLuint &VAO, GLuint &VBO)
 {
     glGenVertexArrays(1, &VAO);
     glGenBuffers(1, &VBO);
+    glGenBuffers(1, &instanceVBO);
 
     glBindVertexArray(VAO);
+
+    // Setup vertex buffer
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
     glBufferData(GL_ARRAY_BUFFER, sizeof(cubeVertices), cubeVertices, GL_STATIC_DRAW);
 
@@ -272,17 +285,33 @@ void setupOpenGL(GLuint &VAO, GLuint &VBO)
     glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void *)(5 * sizeof(float)));
     glEnableVertexAttribArray(2);
 
+    // Set up instance buffer
+    glBindBuffer(GL_ARRAY_BUFFER, instanceVBO);
+    glBufferData(GL_ARRAY_BUFFER, MAX_INSTANCES * sizeof(InstanceData), NULL, GL_DYNAMIC_DRAW);
+
+    // Instance position attribute
+    glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, sizeof(InstanceData), (void *)0);
+    glEnableVertexAttribArray(3);
+    glVertexAttribDivisor(3, 1); // Tell OpenGL this is an instanced attribute
+
+    // Instance scale attribute
+    glVertexAttribPointer(4, 3, GL_FLOAT, GL_FALSE, sizeof(InstanceData), (void *)(sizeof(glm::vec3)));
+    glEnableVertexAttribArray(4);
+    glVertexAttribDivisor(4, 1);
+
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindVertexArray(0);
 }
 
-void updateFPS(GLFWwindow* window) {
+void updateFPS(GLFWwindow *window)
+{
     // Get current time
     double currentTime = glfwGetTime();
     frameCount++;
 
     // Update FPS every 0.5 seconds
-    if (currentTime - lastFPSUpdate >= 0.5) {
+    if (currentTime - lastFPSUpdate >= 0.5)
+    {
         // Calculate FPS
         currentFPS = double(frameCount) / (currentTime - lastFPSUpdate);
         frameCount = 0;
@@ -294,8 +323,8 @@ void updateFPS(GLFWwindow* window) {
     }
 }
 
-
-void setupSkybox() {
+void setupSkybox()
+{
     // Generate and bind VAO and VBO for skybox
     glGenVertexArrays(1, &skyboxVAO);
     glGenBuffers(1, &skyboxVBO);
@@ -303,16 +332,17 @@ void setupSkybox() {
     glBindBuffer(GL_ARRAY_BUFFER, skyboxVBO);
     glBufferData(GL_ARRAY_BUFFER, sizeof(skyboxVertices), &skyboxVertices, GL_STATIC_DRAW);
     glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void *)0);
 
     // Load skybox shader
-    skyboxShaderProgram = compileShader("../shaders/skybox_vertex_shader.glsl", 
-                                      "../shaders/skybox_fragment_shader.glsl");
+    skyboxShaderProgram = compileShader("../shaders/skybox_vertex_shader.glsl",
+                                        "../shaders/skybox_fragment_shader.glsl");
 
     // Change the path to match the building texture path format
-    skyboxTexture = loadTexture("../assets/sky.jpg");  // Changed from "./assets/sky.jpg"
-    
-    if (skyboxTexture == 0) {
+    skyboxTexture = loadTexture("../assets/sky.jpg"); // Changed from "./assets/sky.jpg"
+
+    if (skyboxTexture == 0)
+    {
         std::cerr << "ERROR: Could not load skybox texture. Check if ../assets/sky.jpg exists." << std::endl;
         // Create a default blue texture as fallback
         unsigned char defaultColor[] = {100, 149, 237, 255}; // Cornflower blue
@@ -324,38 +354,40 @@ void setupSkybox() {
     }
 }
 
-
-void renderSkybox(const glm::mat4& view, const glm::mat4& projection) {
+void renderSkybox(const glm::mat4 &view, const glm::mat4 &projection)
+{
     glDepthFunc(GL_LEQUAL);
     glUseProgram(skyboxShaderProgram);
-    
+
     // Remove translation from view matrix
     glm::mat4 skyboxView = glm::mat4(glm::mat3(view));
-    
+
     // Set uniforms
     glUniformMatrix4fv(glGetUniformLocation(skyboxShaderProgram, "view"), 1, GL_FALSE, glm::value_ptr(skyboxView));
     glUniformMatrix4fv(glGetUniformLocation(skyboxShaderProgram, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
-    
+
     // Set the texture uniform
     glUniform1i(glGetUniformLocation(skyboxShaderProgram, "skyboxTexture"), 0);
-    
+
     // Bind skybox texture
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, skyboxTexture);
-    
+
     // Render skybox quad
     glBindVertexArray(skyboxVAO);
     glDrawArrays(GL_TRIANGLES, 0, 36); // Updated vertex count
     glBindVertexArray(0);
-    
+
     glDepthFunc(GL_LESS);
 }
 
-void mouse_callback(GLFWwindow* window, double xposIn, double yposIn) {
+void mouse_callback(GLFWwindow *window, double xposIn, double yposIn)
+{
     float xpos = static_cast<float>(xposIn);
     float ypos = static_cast<float>(yposIn);
 
-    if (firstMouse) {
+    if (firstMouse)
+    {
         lastX = xpos;
         lastY = ypos;
         firstMouse = false;
@@ -373,8 +405,10 @@ void mouse_callback(GLFWwindow* window, double xposIn, double yposIn) {
     pitch += yoffset;
 
     // Constrain pitch
-    if (pitch > 89.0f) pitch = 89.0f;
-    if (pitch < -89.0f) pitch = -89.0f;
+    if (pitch > 89.0f)
+        pitch = 89.0f;
+    if (pitch < -89.0f)
+        pitch = -89.0f;
 
     // Update camera front vector
     glm::vec3 direction;
@@ -448,7 +482,7 @@ int main()
     glfwMakeContextCurrent(window);
     // Mouse capture and callback
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-    glfwSetCursorPosCallback(window, mouse_callback);   
+    glfwSetCursorPosCallback(window, mouse_callback);
     // Set the framebuffer size callback
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
 
@@ -529,7 +563,7 @@ int main()
         glBindTexture(GL_TEXTURE_2D, texture1);
         glBindVertexArray(VAO);
 
-        
+        int instanceCount = 0;
 
         // Modified building rendering loop:
         for (int i = 0; i < gridSizeX; ++i)
@@ -580,14 +614,20 @@ int main()
 
                 glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "model"), 1, GL_FALSE, glm::value_ptr(model));
                 glDrawArrays(GL_TRIANGLES, 0, 36);
+
+                // Update instance data
+                instanceData[instanceCount].position = glm::vec3(baseX, buildingHeights[i][j] / 2.0f, baseZ);
+                instanceData[instanceCount].scale = glm::vec3(1.0f, buildingHeights[i][j], 1.0f);
+                instanceCount++;
             }
         }
 
-  
+        // Update instance buffer
+        glBindBuffer(GL_ARRAY_BUFFER, instanceVBO);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, instanceCount * sizeof(InstanceData), &instanceData[0]);
+        glDrawArraysInstanced(GL_TRIANGLES, 0, 36, instanceCount);
+
         updateFPS(window);
-
-
-        // Swap buffers and poll events
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
@@ -599,6 +639,7 @@ int main()
 
     glDeleteVertexArrays(1, &skyboxVAO);
     glDeleteBuffers(1, &skyboxVBO);
+    glDeleteBuffers(1, &instanceVBO);
 
     glfwTerminate();
     return 0;
