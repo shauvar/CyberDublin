@@ -33,8 +33,8 @@ float cameraSpeed = 0.05f;                             // Reduced speed
 glm::vec3 cameraFront = glm::vec3(0.0f, -0.2f, -1.0f); // Slight downward angle
 glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
 
-const int gridSizeX = 6; // Number of buildings in X direction
-const int gridSizeZ = 6; // Number of buildings in Z direction
+const int gridSizeX = 30; // Number of buildings in X direction
+const int gridSizeZ = 30; // Number of buildings in Z direction
 float buildingHeights[gridSizeX][gridSizeZ];
 
 float xOffset[gridSizeX]; // Track X offset for each column

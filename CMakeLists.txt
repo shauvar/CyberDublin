@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.10)
 project(CyberDublin)
 
+set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
 # Find OpenGL, GLEW, and GLFW
 find_package(OpenGL REQUIRED)
 find_package(GLEW REQUIRED)

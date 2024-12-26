@@ -6,7 +6,7 @@ CXX_DEFINES =
 
 CXX_INCLUDES = -I/Users/shauryavarma/CyberDublin/src -isystem /opt/homebrew/include -iframework /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.2.sdk/System/Library/Frameworks
 
-CXX_FLAGSarm64 =  -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.2.sdk -F/Library/Developer/CommandLineTools/SDKs/MacOSX15.sdk/System/Library/Frameworks 
+CXX_FLAGSarm64 = -g -std=gnu++11 -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.2.sdk -F/Library/Developer/CommandLineTools/SDKs/MacOSX15.sdk/System/Library/Frameworks 
 
-CXX_FLAGS =  -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.2.sdk -F/Library/Developer/CommandLineTools/SDKs/MacOSX15.sdk/System/Library/Frameworks 
+CXX_FLAGS = -g -std=gnu++11 -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.2.sdk -F/Library/Developer/CommandLineTools/SDKs/MacOSX15.sdk/System/Library/Frameworks 
 
