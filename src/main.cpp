@@ -21,6 +21,13 @@ struct InstanceData
     glm::vec3 scale;
 };
 
+struct Car {
+    glm::vec3 position;
+    float speed;
+    glm::vec3 color;
+    bool movingForward;  // Direction flag
+};
+
 // Global variables
 int windowWidth = 1080;
 int windowHeight = 800;
@@ -48,6 +55,13 @@ const int MAX_INSTANCES = gridSizeX * gridSizeZ;
 std::vector<InstanceData> instanceData(MAX_INSTANCES);
 GLuint instanceVBO;
 
+
+std::vector<Car> cars;
+const int NUM_CARS = 10;
+const float ROAD_LENGTH = 60.0f;  // Match your grid size * 2
+const float CAR_SPACING = 12.0f;  // Minimum space between cars
+GLuint carVAO, carVBO;
+
 // For FPS calculation
 double lastTime = 0.0;
 int frameCount = 0;
@@ -61,6 +75,10 @@ bool firstMouse = true;
 float lastX = windowWidth / 2.0f;
 float lastY = windowHeight / 2.0f;
 const float mouseSensitivity = 0.01f;
+
+GLuint roadVAO, roadVBO; // Declare these globally for road rendering
+GLuint roadTexture;      // Declare the road texture globally
+
 
 // Utility function to read a shader file
 std::string readFile(const char *filePath)
@@ -260,6 +278,9 @@ GLuint loadTexture(const char *path)
     stbi_image_free(data);
     return textureID;
 }
+
+
+
 // Setup OpenGL buffers
 void setupOpenGL(GLuint &VAO, GLuint &VBO)
 {
@@ -303,6 +324,133 @@ void setupOpenGL(GLuint &VAO, GLuint &VBO)
     glBindVertexArray(0);
 }
 
+void initializeCars() {
+    cars.clear();
+    float startZ = -ROAD_LENGTH/2;
+    
+    for(int i = 0; i < NUM_CARS; i++) {
+        Car car;
+        car.position = glm::vec3(0.0f, 0.3f, startZ + (i * CAR_SPACING)); // Y = 0.3f to place slightly above road
+        car.speed = 0.05f + static_cast<float>(rand()) / RAND_MAX * 0.03f; // Random speed between 0.05 and 0.08
+        car.movingForward = (rand() % 2 == 0); // Random direction
+        
+        // Random car color (avoiding dark colors)
+        car.color = glm::vec3(
+            0.5f + static_cast<float>(rand()) / RAND_MAX * 0.5f,
+            0.5f + static_cast<float>(rand()) / RAND_MAX * 0.5f,
+            0.5f + static_cast<float>(rand()) / RAND_MAX * 0.5f
+        );
+        
+        // Offset X position based on direction
+        car.position.x = car.movingForward ? -0.5f : 0.5f;
+        
+        cars.push_back(car);
+    }
+}
+
+
+void setupCars() {
+    // Car vertices (simple rectangular prism)
+    float carVertices[] = {
+        // Front face
+        -0.3f, -0.1f, -0.6f,
+         0.3f, -0.1f, -0.6f,
+         0.3f,  0.2f, -0.6f,
+         0.3f,  0.2f, -0.6f,
+        -0.3f,  0.2f, -0.6f,
+        -0.3f, -0.1f, -0.6f,
+
+        // Back face
+        -0.3f, -0.1f,  0.6f,
+         0.3f, -0.1f,  0.6f,
+         0.3f,  0.2f,  0.6f,
+         0.3f,  0.2f,  0.6f,
+        -0.3f,  0.2f,  0.6f,
+        -0.3f, -0.1f,  0.6f,
+
+        // Left face
+        -0.3f,  0.2f,  0.6f,
+        -0.3f,  0.2f, -0.6f,
+        -0.3f, -0.1f, -0.6f,
+        -0.3f, -0.1f, -0.6f,
+        -0.3f, -0.1f,  0.6f,
+        -0.3f,  0.2f,  0.6f,
+
+        // Right face
+         0.3f,  0.2f,  0.6f,
+         0.3f,  0.2f, -0.6f,
+         0.3f, -0.1f, -0.6f,
+         0.3f, -0.1f, -0.6f,
+         0.3f, -0.1f,  0.6f,
+         0.3f,  0.2f,  0.6f,
+
+        // Top face
+        -0.3f,  0.2f, -0.6f,
+         0.3f,  0.2f, -0.6f,
+         0.3f,  0.2f,  0.6f,
+         0.3f,  0.2f,  0.6f,
+        -0.3f,  0.2f,  0.6f,
+        -0.3f,  0.2f, -0.6f,
+
+        // Bottom face
+        -0.3f, -0.1f, -0.6f,
+         0.3f, -0.1f, -0.6f,
+         0.3f, -0.1f,  0.6f,
+         0.3f, -0.1f,  0.6f,
+        -0.3f, -0.1f,  0.6f,
+        -0.3f, -0.1f, -0.6f,
+    };
+
+    glGenVertexArrays(1, &carVAO);
+    glGenBuffers(1, &carVBO);
+
+    glBindVertexArray(carVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, carVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(carVertices), carVertices, GL_STATIC_DRAW);
+
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
+}
+
+
+void updateCars() {
+    for(auto& car : cars) {
+        float moveAmount = car.movingForward ? car.speed : -car.speed;
+        car.position.z += moveAmount;
+
+        // Wrap around when reaching the ends
+        if(car.position.z > ROAD_LENGTH/2) {
+            car.position.z = -ROAD_LENGTH/2;
+        } else if(car.position.z < -ROAD_LENGTH/2) {
+            car.position.z = ROAD_LENGTH/2;
+        }
+    }
+}
+
+// Function to render cars
+void renderCars(GLuint shaderProgram, const glm::mat4& view, const glm::mat4& projection) {
+    glUseProgram(shaderProgram);
+    glBindVertexArray(carVAO);
+
+    for(const auto& car : cars) {
+        glm::mat4 model = glm::mat4(1.0f);
+        model = glm::translate(model, car.position);
+        
+        // Set uniforms
+        glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "model"), 1, GL_FALSE, glm::value_ptr(model));
+        glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "view"), 1, GL_FALSE, glm::value_ptr(view));
+        glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
+        glUniform3fv(glGetUniformLocation(shaderProgram, "carColor"), 1, glm::value_ptr(car.color));
+
+        glDrawArrays(GL_TRIANGLES, 0, 36);
+    }
+
+    glBindVertexArray(0);
+}
+
 void updateFPS(GLFWwindow *window)
 {
     // Get current time
@@ -321,6 +469,62 @@ void updateFPS(GLFWwindow *window)
         std::string title = "CyberDublin | FPS: " + std::to_string(static_cast<int>(currentFPS));
         glfwSetWindowTitle(window, title.c_str());
     }
+}
+
+
+void setupRoad()
+{
+    // Define road vertices (a quad covering the road area)
+     float roadVertices[] = {
+        // Positions          // Texture Coords
+        -30.0f, 0.0f, -3.0f, 0.0f, 0.0f,  // Bottom-left (increased width from -1.5 to -3.0)
+         30.0f, 0.0f, -3.0f, 1.0f, 0.0f,  // Bottom-right
+         30.0f, 0.0f,  3.0f, 1.0f, 1.0f,  // Top-right (increased width from 1.5 to 3.0)
+         30.0f, 0.0f,  3.0f, 1.0f, 1.0f,  // Top-right
+        -30.0f, 0.0f,  3.0f, 0.0f, 1.0f,  // Top-left
+        -30.0f, 0.0f, -3.0f, 0.0f, 0.0f   // Bottom-left
+    };
+ // Generate VAO and VBO
+    glGenVertexArrays(1, &roadVAO);
+    glGenBuffers(1, &roadVBO);
+
+    glBindVertexArray(roadVAO);
+
+    // Bind and set vertex buffer
+    glBindBuffer(GL_ARRAY_BUFFER, roadVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(roadVertices), roadVertices, GL_STATIC_DRAW);
+
+    // Configure vertex attributes
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void *)0); // Position attribute
+    glEnableVertexAttribArray(0);
+
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void *)(3 * sizeof(float))); // Texture coords
+    glEnableVertexAttribArray(1);
+
+    glBindVertexArray(0); // Unbind VAO
+}
+
+
+
+void renderRoad(GLuint shaderProgram, const glm::mat4 &view, const glm::mat4 &projection)
+{
+    glUseProgram(shaderProgram);
+
+    // Model transformation for the road
+    glm::mat4 model = glm::mat4(1.0f); // Identity matrix
+    glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "model"), 1, GL_FALSE, glm::value_ptr(model));
+    glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "view"), 1, GL_FALSE, glm::value_ptr(view));
+    glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
+
+    // Bind road texture
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, roadTexture);
+    glUniform1i(glGetUniformLocation(shaderProgram, "roadTexture"), 0);
+
+    // Render the road
+    glBindVertexArray(roadVAO);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+    glBindVertexArray(0);
 }
 
 void setupSkybox()
@@ -353,6 +557,7 @@ void setupSkybox()
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     }
 }
+
 
 void renderSkybox(const glm::mat4 &view, const glm::mat4 &projection)
 {
@@ -499,6 +704,15 @@ int main()
 
     // Compile shaders
     GLuint shaderProgram = compileShader("../shaders/vertex_shader.glsl", "../shaders/fragment_shader.glsl");
+    roadTexture = loadTexture("../assets/road.jpg");
+    GLuint carShaderProgram = compileShader("../shaders/car_vertex_shader.glsl", 
+                                          "../shaders/car_fragment_shader.glsl");
+
+    setupRoad();
+    setupCars();
+    initializeCars();
+
+
 
     // Set up buffers
     GLuint VAO, VBO;
@@ -548,10 +762,14 @@ int main()
 
         // Update view matrix with the new camera position
         view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
+        
+        updateCars();
 
         renderSkybox(view, projection);
         // Use shader program
         glUseProgram(shaderProgram);
+
+        renderRoad(shaderProgram, view, projection);
 
         // Pass transformation matrices to the shader
         glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
@@ -627,6 +845,8 @@ int main()
         glBufferSubData(GL_ARRAY_BUFFER, 0, instanceCount * sizeof(InstanceData), &instanceData[0]);
         glDrawArraysInstanced(GL_TRIANGLES, 0, 36, instanceCount);
 
+        renderCars(carShaderProgram, view, projection);
+
         updateFPS(window);
         glfwSwapBuffers(window);
         glfwPollEvents();
@@ -640,6 +860,8 @@ int main()
     glDeleteVertexArrays(1, &skyboxVAO);
     glDeleteBuffers(1, &skyboxVBO);
     glDeleteBuffers(1, &instanceVBO);
+    glDeleteVertexArrays(1, &roadVAO);
+    glDeleteBuffers(1, &roadVBO);
 
     glfwTerminate();
     return 0;
