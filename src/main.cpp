@@ -25,7 +25,15 @@ struct Car {
     glm::vec3 position;
     float speed;
     glm::vec3 color;
-    bool movingForward;  // Direction flag
+    bool movingForward;
+    bool brakingLights;  // New: for brake lights effect
+    float headlightIntensity; // New: for headlight glow
+};
+
+
+struct XWing {
+    glm::vec3 position;
+    glm::vec3 color;
 };
 
 // Global variables
@@ -34,6 +42,15 @@ int windowHeight = 800;
 glm::mat4 projection;
 glm::vec3 lightPos(5.0f, 10.0f, 5.0f);
 glm::vec3 lightColor(1.0f, 1.0f, 1.0f);
+
+XWing xwing;
+GLuint xwingVAO, xwingVBO;
+
+
+
+const int NUM_STREETS = 15;  // Number of vertical streets
+const int CARS_PER_STREET = 4;  // Number of cars per street
+const float STREET_SPACING = 4.0f;  // Space between streets
 
 glm::vec3 cameraPos(0.0f, 5.0f, 10.0f);
 float cameraSpeed = 0.05f;                             // Reduced speed
@@ -59,7 +76,7 @@ GLuint instanceVBO;
 std::vector<Car> cars;
 const int NUM_CARS = 10;
 const float ROAD_LENGTH = 60.0f;  // Match your grid size * 2
-const float CAR_SPACING = 12.0f;  // Minimum space between cars
+const float CAR_SPACING = 20.0f;  // Minimum space between cars
 GLuint carVAO, carVBO;
 
 // For FPS calculation
@@ -280,6 +297,52 @@ GLuint loadTexture(const char *path)
 }
 
 
+void setupXWing() {
+    // Simple spaceship vertices - sleek, arrow-like design
+    float shipVertices[] = {
+        // Main body - triangular shape
+        // Top face
+         0.0f,  0.1f, -0.6f,  // Front tip
+        -0.2f,  0.1f,  0.3f,  // Left back
+         0.2f,  0.1f,  0.3f,  // Right back
+
+        // Bottom face
+         0.0f, -0.1f, -0.6f,  // Front tip
+        -0.2f, -0.1f,  0.3f,  // Left back
+         0.2f, -0.1f,  0.3f,  // Right back
+
+        // Side wings
+        // Left wing
+        -0.2f,  0.0f, -0.2f,  // Front
+        -0.4f,  0.0f,  0.1f,  // Back
+        -0.2f,  0.0f,  0.1f,  // Connect to body
+
+        // Right wing
+         0.2f,  0.0f, -0.2f,  // Front
+         0.4f,  0.0f,  0.1f,  // Back
+         0.2f,  0.0f,  0.1f,  // Connect to body
+
+        // Rear stabilizer
+         0.0f,  0.2f,  0.0f,  // Top
+         0.0f,  0.0f,  0.3f,  // Back
+         0.0f, -0.1f,  0.0f   // Bottom
+    };
+
+    glGenVertexArrays(1, &xwingVAO);
+    glGenBuffers(1, &xwingVBO);
+
+    glBindVertexArray(xwingVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, xwingVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(shipVertices), shipVertices, GL_STATIC_DRAW);
+
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+
+    // Dark metallic color
+    xwing.color = glm::vec3(0.3f, 0.3f, 0.35f);
+    xwing.position = cameraPos - glm::vec3(0.0f, 0.5f, 4.0f);
+}
+
 
 // Setup OpenGL buffers
 void setupOpenGL(GLuint &VAO, GLuint &VBO)
@@ -324,51 +387,129 @@ void setupOpenGL(GLuint &VAO, GLuint &VBO)
     glBindVertexArray(0);
 }
 
+
+
+void updateXWing() {
+    // Position X-wing directly in front of camera but slightly below
+    float distance = 3.0f;  // Distance in front of camera
+    
+    // Calculate position directly in front of camera using cameraFront
+    xwing.position = cameraPos + (cameraFront * distance) + glm::vec3(0.0f, -1.0f, 0.0f);  // -1.0f moves it down slightly
+}
+
+void renderXWing(GLuint shaderProgram, const glm::mat4& view, const glm::mat4& projection) {
+    glUseProgram(shaderProgram);
+    glBindVertexArray(xwingVAO);
+
+    glm::mat4 model = glm::mat4(1.0f);
+    model = glm::translate(model, xwing.position);
+    
+    // First rotate 90 degrees around Y to face forward by default
+    model = glm::rotate(model, glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+    
+    // Then apply camera rotation
+    model = glm::rotate(model, glm::radians(yaw + 180.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+    model = glm::rotate(model, glm::radians(-pitch), glm::vec3(1.0f, 0.0f, 0.0f));
+    
+    // Scale
+    model = glm::scale(model, glm::vec3(0.5f));
+
+    glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "model"), 1, GL_FALSE, glm::value_ptr(model));
+    glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "view"), 1, GL_FALSE, glm::value_ptr(view));
+    glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
+
+    // Main body
+    glUniform3fv(glGetUniformLocation(shaderProgram, "carColor"), 1, glm::value_ptr(xwing.color));
+    
+    // Draw main body triangles
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+    
+    // Draw wings
+    glDrawArrays(GL_TRIANGLES, 6, 6);
+    
+    // Draw stabilizer
+    glDrawArrays(GL_TRIANGLES, 12, 3);
+
+    glBindVertexArray(0);
+}
 void initializeCars() {
     cars.clear();
-    float startZ = -ROAD_LENGTH/2;
     
-    for(int i = 0; i < NUM_CARS; i++) {
-        Car car;
-        car.position = glm::vec3(0.0f, 0.3f, startZ + (i * CAR_SPACING)); // Y = 0.3f to place slightly above road
-        car.speed = 0.05f + static_cast<float>(rand()) / RAND_MAX * 0.03f; // Random speed between 0.05 and 0.08
-        car.movingForward = (rand() % 2 == 0); // Random direction
+    // Create cars for each street
+    for(int street = 0; street < NUM_STREETS; street++) {
+        float streetX = -30.0f + (street * STREET_SPACING);  // X position of this street
         
-        // Random car color (avoiding dark colors)
-        car.color = glm::vec3(
-            0.5f + static_cast<float>(rand()) / RAND_MAX * 0.5f,
-            0.5f + static_cast<float>(rand()) / RAND_MAX * 0.5f,
-            0.5f + static_cast<float>(rand()) / RAND_MAX * 0.5f
-        );
-        
-        // Offset X position based on direction
-        car.position.x = car.movingForward ? -0.5f : 0.5f;
-        
-        cars.push_back(car);
+        // Add cars to this street
+        for(int i = 0; i < CARS_PER_STREET; i++) {
+            Car car;
+            // Distribute cars along the street length
+            float startZ = -ROAD_LENGTH/2 + (i * (ROAD_LENGTH/CARS_PER_STREET));
+            
+            car.position = glm::vec3(streetX, 0.3f, startZ);
+            car.speed = 0.02f + static_cast<float>(rand()) / RAND_MAX * 0.02f;  // Slower speed
+            // Alternate direction based on street number
+            car.movingForward = (street % 2 == 0);
+            
+            // Alternate colors for visual variety
+            if (street % 3 == 0) {
+                car.color = glm::vec3(0.8f, 0.2f, 0.2f);  // Red
+            } else if (street % 3 == 1) {
+                car.color = glm::vec3(0.2f, 0.2f, 0.8f);  // Blue
+            } else {
+                car.color = glm::vec3(0.8f, 0.8f, 0.8f);  // Silver
+            }
+            
+            cars.push_back(car);
+        }
     }
 }
 
 
 void setupCars() {
-    // Car vertices (simple rectangular prism)
+    // Car vertices (more realistic car shape)
     float carVertices[] = {
+        // Main body - slightly curved top
         // Front face
-        -0.3f, -0.1f, -0.6f,
-         0.3f, -0.1f, -0.6f,
-         0.3f,  0.2f, -0.6f,
-         0.3f,  0.2f, -0.6f,
-        -0.3f,  0.2f, -0.6f,
-        -0.3f, -0.1f, -0.6f,
+        -0.3f, -0.1f, -0.6f,  // Bottom left
+         0.3f, -0.1f, -0.6f,  // Bottom right
+         0.3f,  0.2f, -0.6f,  // Top right
+         0.3f,  0.2f, -0.6f,  // Top right
+        -0.3f,  0.2f, -0.6f,  // Top left
+        -0.3f, -0.1f, -0.6f,  // Bottom left
 
         // Back face
         -0.3f, -0.1f,  0.6f,
          0.3f, -0.1f,  0.6f,
-         0.3f,  0.2f,  0.6f,
-         0.3f,  0.2f,  0.6f,
-        -0.3f,  0.2f,  0.6f,
+         0.3f,  0.15f,  0.6f,  // Slightly lower for aerodynamic look
+         0.3f,  0.15f,  0.6f,
+        -0.3f,  0.15f,  0.6f,
         -0.3f, -0.1f,  0.6f,
 
-        // Left face
+        // Windshield (angled)
+        -0.25f,  0.2f, -0.2f,
+         0.25f,  0.2f, -0.2f,
+         0.25f,  0.25f, -0.4f,
+         0.25f,  0.25f, -0.4f,
+        -0.25f,  0.25f, -0.4f,
+        -0.25f,  0.2f, -0.2f,
+
+        // Hood
+        -0.25f,  0.15f, -0.6f,
+         0.25f,  0.15f, -0.6f,
+         0.25f,  0.15f, -0.4f,
+         0.25f,  0.15f, -0.4f,
+        -0.25f,  0.15f, -0.4f,
+        -0.25f,  0.15f, -0.6f,
+
+        // Roof
+        -0.25f,  0.25f, -0.4f,
+         0.25f,  0.25f, -0.4f,
+         0.25f,  0.25f,  0.1f,
+         0.25f,  0.25f,  0.1f,
+        -0.25f,  0.25f,  0.1f,
+        -0.25f,  0.25f, -0.4f,
+
+        // Left side
         -0.3f,  0.2f,  0.6f,
         -0.3f,  0.2f, -0.6f,
         -0.3f, -0.1f, -0.6f,
@@ -376,7 +517,7 @@ void setupCars() {
         -0.3f, -0.1f,  0.6f,
         -0.3f,  0.2f,  0.6f,
 
-        // Right face
+        // Right side
          0.3f,  0.2f,  0.6f,
          0.3f,  0.2f, -0.6f,
          0.3f, -0.1f, -0.6f,
@@ -384,21 +525,38 @@ void setupCars() {
          0.3f, -0.1f,  0.6f,
          0.3f,  0.2f,  0.6f,
 
-        // Top face
-        -0.3f,  0.2f, -0.6f,
-         0.3f,  0.2f, -0.6f,
-         0.3f,  0.2f,  0.6f,
-         0.3f,  0.2f,  0.6f,
-        -0.3f,  0.2f,  0.6f,
-        -0.3f,  0.2f, -0.6f,
-
-        // Bottom face
+        // Bottom
         -0.3f, -0.1f, -0.6f,
          0.3f, -0.1f, -0.6f,
          0.3f, -0.1f,  0.6f,
          0.3f, -0.1f,  0.6f,
         -0.3f, -0.1f,  0.6f,
         -0.3f, -0.1f, -0.6f,
+
+        // Wheels (simplified as black boxes)
+        // Front left wheel
+        -0.35f, -0.1f, -0.4f,
+        -0.35f,  0.0f, -0.4f,
+        -0.35f,  0.0f, -0.2f,
+        -0.35f, -0.1f, -0.2f,
+
+        // Front right wheel
+         0.35f, -0.1f, -0.4f,
+         0.35f,  0.0f, -0.4f,
+         0.35f,  0.0f, -0.2f,
+         0.35f, -0.1f, -0.2f,
+
+        // Back left wheel
+        -0.35f, -0.1f,  0.4f,
+        -0.35f,  0.0f,  0.4f,
+        -0.35f,  0.0f,  0.2f,
+        -0.35f, -0.1f,  0.2f,
+
+        // Back right wheel
+         0.35f, -0.1f,  0.4f,
+         0.35f,  0.0f,  0.4f,
+         0.35f,  0.0f,  0.2f,
+         0.35f, -0.1f,  0.2f,
     };
 
     glGenVertexArrays(1, &carVAO);
@@ -427,8 +585,23 @@ void updateCars() {
         } else if(car.position.z < -ROAD_LENGTH/2) {
             car.position.z = ROAD_LENGTH/2;
         }
+        
+        // Check for nearby cars in same lane
+        for(const auto& otherCar : cars) {
+            if(&otherCar != &car && abs(car.position.x - otherCar.position.x) < 0.1f) { // Same lane
+                float distance = abs(car.position.z - otherCar.position.z);
+                if(distance < 2.0f) { // Too close
+                    car.speed *= 0.95f; // Slow down
+                    car.brakingLights = true;
+                } else {
+                    car.speed = 0.02f + static_cast<float>(rand()) / RAND_MAX * 0.02f; // Resume normal speed
+                    car.brakingLights = false;
+                }
+            }
+        }
     }
 }
+
 
 // Function to render cars
 void renderCars(GLuint shaderProgram, const glm::mat4& view, const glm::mat4& projection) {
@@ -439,13 +612,27 @@ void renderCars(GLuint shaderProgram, const glm::mat4& view, const glm::mat4& pr
         glm::mat4 model = glm::mat4(1.0f);
         model = glm::translate(model, car.position);
         
+        // Rotate car based on direction
+        if (!car.movingForward) {
+            model = glm::rotate(model, glm::radians(180.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+        }
+
         // Set uniforms
         glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "model"), 1, GL_FALSE, glm::value_ptr(model));
         glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "view"), 1, GL_FALSE, glm::value_ptr(view));
         glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
         glUniform3fv(glGetUniformLocation(shaderProgram, "carColor"), 1, glm::value_ptr(car.color));
+        glUniform1i(glGetUniformLocation(shaderProgram, "brakingLights"), car.brakingLights);
+        glUniform1f(glGetUniformLocation(shaderProgram, "headlightIntensity"), car.headlightIntensity);
+        glUniform1i(glGetUniformLocation(shaderProgram, "movingForward"), car.movingForward);
 
-        glDrawArrays(GL_TRIANGLES, 0, 36);
+        // Draw main car body
+        glDrawArrays(GL_TRIANGLES, 0, 48);  // Draw main body vertices
+
+        // Draw wheels in black
+        glm::vec3 wheelColor(0.1f, 0.1f, 0.1f);
+        glUniform3fv(glGetUniformLocation(shaderProgram, "carColor"), 1, glm::value_ptr(wheelColor));
+        glDrawArrays(GL_TRIANGLE_FAN, 48, 16);  // Draw wheel vertices
     }
 
     glBindVertexArray(0);
@@ -472,38 +659,40 @@ void updateFPS(GLFWwindow *window)
 }
 
 
-void setupRoad()
-{
-    // Define road vertices (a quad covering the road area)
-     float roadVertices[] = {
-        // Positions          // Texture Coords
-        -30.0f, 0.0f, -3.0f, 0.0f, 0.0f,  // Bottom-left (increased width from -1.5 to -3.0)
-         30.0f, 0.0f, -3.0f, 1.0f, 0.0f,  // Bottom-right
-         30.0f, 0.0f,  3.0f, 1.0f, 1.0f,  // Top-right (increased width from 1.5 to 3.0)
-         30.0f, 0.0f,  3.0f, 1.0f, 1.0f,  // Top-right
-        -30.0f, 0.0f,  3.0f, 0.0f, 1.0f,  // Top-left
-        -30.0f, 0.0f, -3.0f, 0.0f, 0.0f   // Bottom-left
-    };
- // Generate VAO and VBO
+void setupRoad() {
+    std::vector<float> roadVertices;
+    
+    // Create a road for each street
+    for(int i = 0; i < NUM_STREETS; i++) {
+        float xPos = -30.0f + (i * STREET_SPACING);
+        
+        // Road vertices for this street
+        float streetVerts[] = {
+            xPos - 0.5f, 0.0f, -30.0f, 0.0f, 0.0f,  // Bottom-left
+            xPos + 0.5f, 0.0f, -30.0f, 1.0f, 0.0f,  // Bottom-right
+            xPos + 0.5f, 0.0f,  30.0f, 1.0f, 1.0f,  // Top-right
+            xPos + 0.5f, 0.0f,  30.0f, 1.0f, 1.0f,  // Top-right
+            xPos - 0.5f, 0.0f,  30.0f, 0.0f, 1.0f,  // Top-left
+            xPos - 0.5f, 0.0f, -30.0f, 0.0f, 0.0f   // Bottom-left
+        };
+        
+        roadVertices.insert(roadVertices.end(), std::begin(streetVerts), std::end(streetVerts));
+    }
+
     glGenVertexArrays(1, &roadVAO);
     glGenBuffers(1, &roadVBO);
 
     glBindVertexArray(roadVAO);
-
-    // Bind and set vertex buffer
     glBindBuffer(GL_ARRAY_BUFFER, roadVBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(roadVertices), roadVertices, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, roadVertices.size() * sizeof(float), roadVertices.data(), GL_STATIC_DRAW);
 
-    // Configure vertex attributes
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void *)0); // Position attribute
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
-
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void *)(3 * sizeof(float))); // Texture coords
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
     glEnableVertexAttribArray(1);
 
-    glBindVertexArray(0); // Unbind VAO
+    glBindVertexArray(0);
 }
-
 
 
 void renderRoad(GLuint shaderProgram, const glm::mat4 &view, const glm::mat4 &projection)
@@ -710,6 +899,8 @@ int main()
 
     setupRoad();
     setupCars();
+    setupXWing();
+
     initializeCars();
 
 
@@ -762,6 +953,7 @@ int main()
 
         // Update view matrix with the new camera position
         view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
+        updateXWing();
         
         updateCars();
 
@@ -846,6 +1038,7 @@ int main()
         glDrawArraysInstanced(GL_TRIANGLES, 0, 36, instanceCount);
 
         renderCars(carShaderProgram, view, projection);
+        renderXWing(carShaderProgram, view, projection);
 
         updateFPS(window);
         glfwSwapBuffers(window);
