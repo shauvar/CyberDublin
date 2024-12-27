@@ -412,7 +412,7 @@ void renderXWing(GLuint shaderProgram, const glm::mat4& view, const glm::mat4& p
     model = glm::rotate(model, glm::radians(-pitch), glm::vec3(1.0f, 0.0f, 0.0f));
     
     // Scale
-    model = glm::scale(model, glm::vec3(0.5f));
+    model = glm::scale(model, glm::vec3(0.7f));
 
     glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "model"), 1, GL_FALSE, glm::value_ptr(model));
     glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "view"), 1, GL_FALSE, glm::value_ptr(view));
@@ -661,24 +661,27 @@ void updateFPS(GLFWwindow *window)
 
 void setupRoad() {
     std::vector<float> roadVertices;
-    
-    // Create a road for each street
-    for(int i = 0; i < NUM_STREETS; i++) {
+
+    // Create road vertices for each street
+    for (int i = 0; i < NUM_STREETS; i++) {
         float xPos = -30.0f + (i * STREET_SPACING);
-        
-        // Road vertices for this street
+
+        // Define vertices with texture coordinates
         float streetVerts[] = {
-            xPos - 0.5f, 0.0f, -30.0f, 0.0f, 0.0f,  // Bottom-left
-            xPos + 0.5f, 0.0f, -30.0f, 1.0f, 0.0f,  // Bottom-right
-            xPos + 0.5f, 0.0f,  30.0f, 1.0f, 1.0f,  // Top-right
-            xPos + 0.5f, 0.0f,  30.0f, 1.0f, 1.0f,  // Top-right
-            xPos - 0.5f, 0.0f,  30.0f, 0.0f, 1.0f,  // Top-left
-            xPos - 0.5f, 0.0f, -30.0f, 0.0f, 0.0f   // Bottom-left
+            // Positions          // Texture Coords
+            xPos - 0.5f, 0.0f, -30.0f,  0.0f, 0.0f,  // Bottom-left
+            xPos + 0.5f, 0.0f, -30.0f,  1.0f, 0.0f,  // Bottom-right
+            xPos + 0.5f, 0.0f,  30.0f,  1.0f, 30.0f, // Top-right
+            
+            xPos - 0.5f, 0.0f, -30.0f,  0.0f, 0.0f,  // Bottom-left
+            xPos + 0.5f, 0.0f,  30.0f,  1.0f, 30.0f, // Top-right
+            xPos - 0.5f, 0.0f,  30.0f,  0.0f, 30.0f  // Top-left
         };
-        
+
         roadVertices.insert(roadVertices.end(), std::begin(streetVerts), std::end(streetVerts));
     }
 
+    // Create and bind VAO and VBO for roads
     glGenVertexArrays(1, &roadVAO);
     glGenBuffers(1, &roadVBO);
 
@@ -686,21 +689,26 @@ void setupRoad() {
     glBindBuffer(GL_ARRAY_BUFFER, roadVBO);
     glBufferData(GL_ARRAY_BUFFER, roadVertices.size() * sizeof(float), roadVertices.data(), GL_STATIC_DRAW);
 
+    // Position attribute
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
+
+    // Texture coordinate attribute
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
     glEnableVertexAttribArray(1);
+
+    // Load road texture
+    roadTexture = loadTexture("../assets/road.jpg");
 
     glBindVertexArray(0);
 }
 
 
-void renderRoad(GLuint shaderProgram, const glm::mat4 &view, const glm::mat4 &projection)
-{
+void renderRoad(GLuint shaderProgram, const glm::mat4& view, const glm::mat4& projection) {
     glUseProgram(shaderProgram);
 
-    // Model transformation for the road
-    glm::mat4 model = glm::mat4(1.0f); // Identity matrix
+    // Set transformation matrices
+    glm::mat4 model = glm::mat4(1.0f);
     glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "model"), 1, GL_FALSE, glm::value_ptr(model));
     glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "view"), 1, GL_FALSE, glm::value_ptr(view));
     glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
@@ -712,7 +720,7 @@ void renderRoad(GLuint shaderProgram, const glm::mat4 &view, const glm::mat4 &pr
 
     // Render the road
     glBindVertexArray(roadVAO);
-    glDrawArrays(GL_TRIANGLES, 0, 6);
+    glDrawArrays(GL_TRIANGLES, 0, NUM_STREETS * 6);
     glBindVertexArray(0);
 }
 
