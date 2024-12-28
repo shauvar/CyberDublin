@@ -57,8 +57,8 @@ float cameraSpeed = 0.05f;                             // Reduced speed
 glm::vec3 cameraFront = glm::vec3(0.0f, -0.2f, -1.0f); // Slight downward angle
 glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
 
-const int gridSizeX = 30; // Number of buildings in X direction
-const int gridSizeZ = 30; // Number of buildings in Z direction
+const int gridSizeX = 60; // Number of buildings in X direction
+const int gridSizeZ = 60; // Number of buildings in Z direction
 float buildingHeights[gridSizeX][gridSizeZ];
 
 float xOffset[gridSizeX]; // Track X offset for each column
@@ -75,7 +75,7 @@ GLuint instanceVBO;
 
 std::vector<Car> cars;
 const int NUM_CARS = 10;
-const float ROAD_LENGTH = 60.0f;  // Match your grid size * 2
+const float ROAD_LENGTH = 60.0f;  // Match  grid size * 2
 const float CAR_SPACING = 20.0f;  // Minimum space between cars
 GLuint carVAO, carVBO;
 
@@ -289,7 +289,7 @@ GLuint loadTexture(const char *path)
     else
     {
         std::cerr << "Failed to load texture: " << path << std::endl;
-        std::cerr << "STB Error: " << stbi_failure_reason() << std::endl; // Add this line
+        std::cerr << "STB Error: " << stbi_failure_reason() << std::endl; 
         return 0;
     }
     stbi_image_free(data);
